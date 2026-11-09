@@ -35,17 +35,21 @@
                 <div>
                     <div class="flex items-center space-x-2">
                         <h1 class="font-bold text-slate-100 tracking-wide text-base">AggriCheck QC Pro</h1>
-                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v8.3 Auto-Retry Stable</span>
+                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v8.4 History Manager</span>
                     </div>
                     <p class="text-xs text-slate-400">Hệ thống Đánh giá Cốt liệu & Cấp phối Đá dăm Hiện trường (TCVN)</p>
                 </div>
             </div>
             
-            <!-- Ô nhập API Key an toàn trên góc phải -->
+            <!-- Ô nhập API Key & Nút mở Lịch sử -->
             <div class="flex items-center space-x-2 no-print">
+                <button onclick="toggleHistoryModal(true)" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition flex items-center space-x-1.5">
+                    <i class="fa-solid fa-clock-rotate-left text-amber-400"></i>
+                    <span>Lịch Sử (<span id="historyCount">0</span>)</span>
+                </button>
                 <div class="relative">
-                    <input type="password" id="apiKeyInput" placeholder="Nhập Gemini API Key của bạn..." 
-                           class="text-xs bg-slate-950 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 w-64 focus:ring-1 focus:ring-amber-500 focus:border-amber-500 outline-none font-mono-num" />
+                    <input type="password" id="apiKeyInput" placeholder="Nhập Gemini API Key..." 
+                           class="text-xs bg-slate-950 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 w-52 focus:ring-1 focus:ring-amber-500 focus:border-amber-500 outline-none font-mono-num" />
                 </div>
             </div>
         </div>
@@ -56,7 +60,7 @@
         <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-xs text-amber-200 flex items-start space-x-3 no-print">
             <i class="fa-solid fa-shield-halved text-amber-400 text-lg mt-0.5 flex-shrink-0"></i>
             <div class="leading-relaxed">
-                <strong class="font-semibold text-amber-300">Hướng dẫn Hiện trường:</strong> Nhập API Key ở góc trên bên phải, sau đó chụp ảnh mẫu vật liệu đặt kèm thước đo chuẩn. Hệ thống sẽ kết hợp Gemini AI để phân tích trực quan cỡ hạt $D_{\max}$, tỷ lệ thoi dẹt, hàm lượng bụi sét theo tiêu chuẩn TCVN.
+                <strong class="font-semibold text-amber-300">Hướng dẫn Hiện trường:</strong> Nhập API Key ở góc trên bên phải, chụp ảnh mẫu đặt kèm thước đo. Kết quả phân tích sẽ tự động lưu vào Lịch sử để anh dễ dàng tra cứu hoặc xóa khi không cần thiết.
             </div>
         </div>
 
@@ -202,10 +206,50 @@
         </div>
     </main>
 
+    <!-- Modal Lịch Sử -->
+    <div id="historyModal" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+                <h3 class="font-bold text-sm text-slate-100 flex items-center space-x-2">
+                    <i class="fa-solid fa-clock-rotate-left text-amber-400"></i>
+                    <span>Lịch Sử Các Lần Phân Tích Mẫu</span>
+                </h3>
+                <div class="flex items-center space-x-2">
+                    <button onclick="clearAllHistory()" class="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 text-xs font-medium rounded border border-rose-500/30 transition">
+                        Xóa tất cả lịch sử
+                    </button>
+                    <button onclick="toggleHistoryModal(false)" class="text-slate-400 hover:text-white px-2 py-1 text-sm">✕</button>
+                </div>
+            </div>
+            <div id="historyListContainer" class="p-4 overflow-y-auto space-y-3 flex-1">
+                <!-- Danh sách lịch sử render tại đây -->
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { GoogleGenAI } from "@google/genai";
 
         let fileList = [];
+        let analysisHistory = JSON.parse(localStorage.getItem('aggricheck_history') || '[]');
+
+        window.addEventListener('DOMContentLoaded', () => {
+            updateHistoryCount();
+        });
+
+        window.toggleHistoryModal = function(show) {
+            const modal = document.getElementById('historyModal');
+            if (show) {
+                renderHistoryList();
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function updateHistoryCount() {
+            document.getElementById('historyCount').innerText = analysisHistory.length;
+        }
 
         window.handleFiles = function(files) {
             for (let file of files) {
@@ -213,6 +257,7 @@
                     fileList.push({
                         id: 'img_' + Math.random().toString(36).substr(2, 9),
                         file: file,
+                        previewUrl: URL.createObjectURL(file),
                         result: null
                     });
                 }
@@ -248,18 +293,13 @@
             btn.disabled = false;
 
             fileList.forEach((item, index) => {
-                const reader = new FileReader();
                 const div = document.createElement('div');
                 div.className = "relative group border border-slate-800 rounded-lg overflow-hidden bg-slate-950 aspect-square shadow-sm";
-                
-                reader.onload = (e) => {
-                    div.innerHTML = `
-                        <img src="${e.target.result}" class="w-full h-full object-cover">
-                        <span class="absolute top-1 left-1 bg-slate-950/80 text-slate-300 text-[10px] font-mono-num px-1.5 py-0.5 rounded">Góc #${index + 1}</span>
-                        <button onclick="removeFile('${item.id}')" class="absolute top-1 right-1 bg-rose-500/80 hover:bg-rose-600 text-white text-xs w-4 h-4 rounded flex items-center justify-center transition">✕</button>
-                    `;
-                };
-                reader.readAsDataURL(item.file);
+                div.innerHTML = `
+                    <img src="${item.previewUrl}" class="w-full h-full object-cover">
+                    <span class="absolute top-1 left-1 bg-slate-950/80 text-slate-300 text-[10px] font-mono-num px-1.5 py-0.5 rounded">Góc #${index + 1}</span>
+                    <button onclick="removeFile('${item.id}')" class="absolute top-1 right-1 bg-rose-500/80 hover:bg-rose-600 text-white text-xs w-4 h-4 rounded flex items-center justify-center transition">✕</button>
+                `;
                 grid.appendChild(div);
             });
         }
@@ -293,9 +333,7 @@
                 progressBar.style.width = `${Math.round(((i + 0.5) / fileList.length) * 100)}%`;
 
                 try {
-                    // Gọi hàm với cơ chế tự động thử lại khi gặp quá tải (503)
                     item.result = await analyzeWithRetry(ai, item.file, matType);
-                    // Nghỉ nhẹ 1.5 giây giữa các ảnh để tránh nghẽn tải server Google
                     await new Promise(r => setTimeout(r, 1500));
                 } catch (err) {
                     alert(`Lỗi phân tích AI ở ảnh #${i + 1}: ${err.message}. Vui lòng thử lại sau giây lát!`);
@@ -306,17 +344,17 @@
             }
 
             renderSummary();
+            saveCurrentToHistory(matType);
+
             btn.disabled = false;
             progressContainer.classList.add('hidden');
         }
 
-        // Cơ chế thử lại tự động khi gặp lỗi 503 quá tải
         async function analyzeWithRetry(aiInstance, file, matType, retries = 3, delay = 3000) {
             try {
                 return await analyzeWithGeminiSDK(aiInstance, file, matType);
             } catch (error) {
                 if (retries > 0 && (error.message.includes('503') || error.message.includes('overloaded') || error.message.includes('unavailable'))) {
-                    console.warn(`Server quá tải, đang thử lại sau ${delay/1000}s... (Còn ${retries} lần thử)`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                     return analyzeWithRetry(aiInstance, file, matType, retries - 1, delay * 1.5);
                 }
@@ -370,6 +408,80 @@ Trả về JSON thuần duy nhất, không dùng markdown:
             return resultData;
         }
 
+        function saveCurrentToHistory(matType) {
+            const record = {
+                id: 'hist_' + Date.now(),
+                timestamp: new Date().toLocaleString('vi-VN'),
+                materialType: matType,
+                fileCount: fileList.length,
+                results: fileList.map(f => ({ result: f.result, previewUrl: f.previewUrl }))
+            };
+            analysisHistory.unshift(record);
+            localStorage.setItem('aggricheck_history', JSON.stringify(analysisHistory));
+            updateHistoryCount();
+        }
+
+        window.deleteHistoryItem = function(id, event) {
+            event.stopPropagation();
+            analysisHistory = analysisHistory.filter(h => h.id !== id);
+            localStorage.setItem('aggricheck_history', JSON.stringify(analysisHistory));
+            updateHistoryCount();
+            renderHistoryList();
+        }
+
+        window.clearAllHistory = function() {
+            if (confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử phân tích không?")) {
+                analysisHistory = [];
+                localStorage.removeItem('aggricheck_history');
+                updateHistoryCount();
+                renderHistoryList();
+            }
+        }
+
+        window.loadHistoryItem = function(id) {
+            const item = analysisHistory.find(h => h.id === id);
+            if (!item) return;
+
+            document.getElementById('materialType').value = item.materialType;
+            fileList = item.results.map(r => ({
+                file: null,
+                previewUrl: r.previewUrl,
+                result: r.result
+            }));
+
+            renderThumbnails();
+            renderSummary();
+            toggleHistoryModal(false);
+        }
+
+        function renderHistoryList() {
+            const container = document.getElementById('historyListContainer');
+            if (analysisHistory.length === 0) {
+                container.innerHTML = '<p class="text-xs text-slate-500 text-center py-8">Chưa có lịch sử phân tích nào được lưu.</p>';
+                return;
+            }
+
+            container.innerHTML = analysisHistory.map(h => {
+                let matName = h.materialType === 'da_1x2' ? 'Đá 1x2 (TCVN 7570:2006)' : (h.materialType === 'cpdd_l1' ? 'CPĐD Loại 1 (TCVN 8859:2011)' : 'CPĐD Loại 2 (TCVN 8859:2011)');
+                return `
+                    <div onclick="loadHistoryItem('${h.id}')" class="bg-slate-950 border border-slate-800 hover:border-amber-500/50 rounded-xl p-3.5 cursor-pointer transition flex justify-between items-center group">
+                        <div class="space-y-1">
+                            <div class="flex items-center space-x-2">
+                                <span class="font-bold text-xs text-slate-200">${matName}</span>
+                                <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">${h.fileCount} góc chụp</span>
+                            </div>
+                            <div class="text-[11px] text-slate-400 font-mono-num"><i class="fa-regular fa-clock text-amber-400 mr-1"></i>${h.timestamp}</div>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="deleteHistoryItem('${h.id}', event)" class="w-7 h-7 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 flex items-center justify-center transition border border-rose-500/20" title="Xóa biên bản này">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
         function getColorClass(val, maxLimit, warningMargin = 3) {
             if (val > maxLimit) return 'text-rose-400 font-bold';
             if (val > (maxLimit - warningMargin)) return 'text-amber-400 font-bold';
@@ -400,7 +512,7 @@ Trả về JSON thuần duy nhất, không dùng markdown:
                 tr.className = "hover:bg-slate-800/40 transition-colors";
                 tr.innerHTML = `
                     <td class="p-3 flex items-center space-x-2">
-                        <img src="${URL.createObjectURL(item.file)}" class="w-8 h-8 object-cover rounded border border-slate-800">
+                        <img src="${item.previewUrl}" class="w-8 h-8 object-cover rounded border border-slate-800">
                         <span class="font-bold text-slate-300">Góc #${idx + 1}</span>
                     </td>
                     <td class="p-3 font-mono-num font-bold text-slate-200">${res.dMaxMm} mm</td>
