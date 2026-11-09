@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AggriCheck QC Pro - Hệ thống Phân tích & Đo đạc Kích thước Đá Hiện trường</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Import Google Gen AI SDK chính thức -->
     <script type="importmap">
       {
         "imports": {
@@ -36,15 +35,18 @@
                 <div>
                     <div class="flex items-center space-x-2">
                         <h1 class="font-bold text-slate-100 tracking-wide text-base">AggriCheck QC Pro</h1>
-                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v7.9 SDK Connect</span>
+                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v8.0 Secure Input</span>
                     </div>
                     <p class="text-xs text-slate-400">Hệ thống Đánh giá Cốt liệu & Cấp phối Đá dăm Hiện trường (TCVN)</p>
                 </div>
             </div>
             
-            <div class="flex items-center space-x-2 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-lg no-print">
-                <i class="fa-solid fa-circle-check"></i>
-                <span>Đã kết nối AI tự động</span>
+            <!-- Ô nhập API Key an toàn trên góc phải -->
+            <div class="flex items-center space-x-2 no-print">
+                <div class="relative">
+                    <input type="password" id="apiKeyInput" placeholder="Nhập Gemini API Key của bạn..." 
+                           class="text-xs bg-slate-950 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 w-64 focus:ring-1 focus:ring-amber-500 focus:border-amber-500 outline-none font-mono-num" />
+                </div>
             </div>
         </div>
     </header>
@@ -54,7 +56,7 @@
         <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-xs text-amber-200 flex items-start space-x-3 no-print">
             <i class="fa-solid fa-shield-halved text-amber-400 text-lg mt-0.5 flex-shrink-0"></i>
             <div class="leading-relaxed">
-                <strong class="font-semibold text-amber-300">Hướng dẫn Hiện trường:</strong> Chụp ảnh mẫu vật liệu đặt kèm thước đo chuẩn. Hệ thống sẽ kết hợp Gemini AI để phân tích trực quan cỡ hạt $D_{\max}$, tỷ lệ thoi dẹt, hàm lượng bụi sét theo tiêu chuẩn TCVN.
+                <strong class="font-semibold text-amber-300">Hướng dẫn Hiện trường:</strong> Nhập API Key ở góc trên bên phải, sau đó chụp ảnh mẫu vật liệu đặt kèm thước đo chuẩn. Hệ thống sẽ kết hợp Gemini AI để phân tích trực quan cỡ hạt $D_{\max}$, tỷ lệ thoi dẹt, hàm lượng bụi sét theo tiêu chuẩn TCVN.
             </div>
         </div>
 
@@ -203,10 +205,6 @@
     <script type="module">
         import { GoogleGenAI } from "@google/genai";
 
-        // Khóa API chính thức của anh
-        const EMBEDDED_API_KEY = "AQ.Ab8RN6J7kslvB_eng72XMgDBCq-8KRJfd48ej5IMe58yKNxsQ";
-        const ai = new GoogleGenAI({ apiKey: EMBEDDED_API_KEY });
-
         let fileList = [];
 
         window.handleFiles = function(files) {
@@ -267,6 +265,13 @@
         }
 
         window.processBatch = async function() {
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            if (!apiKey) {
+                alert("Vui lòng nhập API Key vào ô ở góc trên bên phải trước khi phân tích!");
+                document.getElementById('apiKeyInput').focus();
+                return;
+            }
+
             if (fileList.length === 0) return;
 
             const btn = document.getElementById('processBtn');
@@ -278,6 +283,7 @@
             btn.disabled = true;
             progressContainer.classList.remove('hidden');
 
+            const ai = new GoogleGenAI({ apiKey: apiKey });
             const matType = document.getElementById('materialType').value;
 
             for (let i = 0; i < fileList.length; i++) {
@@ -287,9 +293,9 @@
                 progressBar.style.width = `${Math.round(((i + 0.5) / fileList.length) * 100)}%`;
 
                 try {
-                    item.result = await analyzeWithGeminiSDK(item.file, matType);
+                    item.result = await analyzeWithGeminiSDK(ai, item.file, matType);
                 } catch (err) {
-                    alert(`Lỗi phân tích AI ở ảnh #${i + 1}: ${err.message}. Vui lòng kiểm tra lại kết nối mạng!`);
+                    alert(`Lỗi phân tích AI ở ảnh #${i + 1}: ${err.message}. Vui lòng kiểm tra lại API Key hoặc kết nối mạng!`);
                     btn.disabled = false;
                     progressContainer.classList.add('hidden');
                     return;
@@ -301,7 +307,7 @@
             progressContainer.classList.add('hidden');
         }
 
-        async function analyzeWithGeminiSDK(file, matType) {
+        async function analyzeWithGeminiSDK(aiInstance, file, matType) {
             const base64Data = await new Promise((res) => {
                 const r = new FileReader();
                 r.onload = () => res(r.result.split(',')[1]);
@@ -323,7 +329,7 @@ Nếu ĐÚNG là ảnh mẫu đá, hãy phân tích theo TCVN 7570:2006 / TCVN 8
 Trả về JSON thuần duy nhất, không dùng markdown:
 {"dMaxMm": number, "flakyPercent": number, "dustPercent": number, "weatheredPercent": number, "uniformityScore": number, "scaleStatus": "string"}`;
 
-            const response = await ai.models.generateContent({
+            const response = await aiInstance.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: [
                     promptText,
