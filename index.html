@@ -35,7 +35,7 @@
                 <div>
                     <div class="flex items-center space-x-2">
                         <h1 class="font-bold text-slate-100 tracking-wide text-base">AggriCheck QC Pro</h1>
-                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v8.2 Stable</span>
+                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v8.3 Auto-Retry Stable</span>
                     </div>
                     <p class="text-xs text-slate-400">Hệ thống Đánh giá Cốt liệu & Cấp phối Đá dăm Hiện trường (TCVN)</p>
                 </div>
@@ -293,9 +293,12 @@
                 progressBar.style.width = `${Math.round(((i + 0.5) / fileList.length) * 100)}%`;
 
                 try {
-                    item.result = await analyzeWithGeminiSDK(ai, item.file, matType);
+                    // Gọi hàm với cơ chế tự động thử lại khi gặp quá tải (503)
+                    item.result = await analyzeWithRetry(ai, item.file, matType);
+                    // Nghỉ nhẹ 1.5 giây giữa các ảnh để tránh nghẽn tải server Google
+                    await new Promise(r => setTimeout(r, 1500));
                 } catch (err) {
-                    alert(`Lỗi phân tích AI ở ảnh #${i + 1}: ${err.message}. Vui lòng kiểm tra lại API Key hoặc kết nối mạng!`);
+                    alert(`Lỗi phân tích AI ở ảnh #${i + 1}: ${err.message}. Vui lòng thử lại sau giây lát!`);
                     btn.disabled = false;
                     progressContainer.classList.add('hidden');
                     return;
@@ -305,6 +308,20 @@
             renderSummary();
             btn.disabled = false;
             progressContainer.classList.add('hidden');
+        }
+
+        // Cơ chế thử lại tự động khi gặp lỗi 503 quá tải
+        async function analyzeWithRetry(aiInstance, file, matType, retries = 3, delay = 3000) {
+            try {
+                return await analyzeWithGeminiSDK(aiInstance, file, matType);
+            } catch (error) {
+                if (retries > 0 && (error.message.includes('503') || error.message.includes('overloaded') || error.message.includes('unavailable'))) {
+                    console.warn(`Server quá tải, đang thử lại sau ${delay/1000}s... (Còn ${retries} lần thử)`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return analyzeWithRetry(aiInstance, file, matType, retries - 1, delay * 1.5);
+                }
+                throw error;
+            }
         }
 
         async function analyzeWithGeminiSDK(aiInstance, file, matType) {
@@ -342,7 +359,6 @@ Trả về JSON thuần duy nhất, không dùng markdown:
                 ]
             });
 
-            // Sửa lại thành truy xuất text dạng thuộc tính chuẩn của SDK mới
             const rawText = response.text;
             const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
             const resultData = JSON.parse(cleanText);
@@ -403,7 +419,7 @@ Trả về JSON thuần duy nhất, không dùng markdown:
             const avgWeatheredVal = Math.round(sumWeathered / count);
 
             let flakyMax = 15, dustMax = 1, dMaxLimit = 25.0;
-            let matName = "Đá 1x2 (TCVN 7570:2006)";
+            let matName = "Đá 1x2 (Bê tông / Mặt đường - TCVN 7570:2006)";
 
             if (matType === 'cpdd_l1') {
                 flakyMax = 18; dustMax = 5; dMaxLimit = 31.5;
