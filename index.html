@@ -35,7 +35,7 @@
                 <div>
                     <div class="flex items-center space-x-2">
                         <h1 class="font-bold text-slate-100 tracking-wide text-base">AggriCheck QC Pro</h1>
-                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v8.1 Gemini 3.8 Flash</span>
+                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v8.2 Stable</span>
                     </div>
                     <p class="text-xs text-slate-400">Hệ thống Đánh giá Cốt liệu & Cấp phối Đá dăm Hiện trường (TCVN)</p>
                 </div>
@@ -342,7 +342,8 @@ Trả về JSON thuần duy nhất, không dùng markdown:
                 ]
             });
 
-            const rawText = response.text();
+            // Sửa lại thành truy xuất text dạng thuộc tính chuẩn của SDK mới
+            const rawText = response.text;
             const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
             const resultData = JSON.parse(cleanText);
 
@@ -406,10 +407,10 @@ Trả về JSON thuần duy nhất, không dùng markdown:
 
             if (matType === 'cpdd_l1') {
                 flakyMax = 18; dustMax = 5; dMaxLimit = 31.5;
-                matName = "Cấp phối đá dăm Loại 1 (TCVN 8859:2011)";
+                matName = "Cấp phối đá dăm Loại 1 (Mặt đường - TCVN 8859:2011)";
             } else if (matType === 'cpdd_l2') {
                 flakyMax = 20; dustMax = 7; dMaxLimit = 37.5;
-                matName = "Cấp phối đá dăm Loại 2 (TCVN 8859:2011)";
+                matName = "Cấp phối đá dăm Loại 2 (Móng đường - TCVN 8859:2011)";
             }
 
             const dmaxElem = document.getElementById('avgDmax');
