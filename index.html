@@ -28,7 +28,7 @@
                 <div>
                     <div class="flex items-center space-x-2">
                         <h1 class="font-bold text-slate-100 tracking-wide text-base">AggriCheck QC Pro</h1>
-                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v7.5 Clean Risk Monitor</span>
+                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v7.6 Strict AI Guard</span>
                     </div>
                     <p class="text-xs text-slate-400">Hệ thống Đánh giá Cốt liệu & Cấp phối Đá dăm Hiện trường (TCVN)</p>
                 </div>
@@ -271,19 +271,17 @@
             for (let i = 0; i < fileList.length; i++) {
                 const item = fileList[i];
                 
-                for (let stage = 1; stage <= 3; stage++) {
-                    const currentPct = Math.round((((i) + (stage / 3)) / fileList.length) * 100);
-                    progressBar.style.width = `${currentPct}%`;
-                    progressPercent.innerText = `${currentPct}%`;
-                    
-                    if (stage === 1) progressText.innerText = `Đang gửi ảnh góc #${i + 1} lên Gemini AI phân tích...`;
-                    else if (stage === 2) progressText.innerText = `Đang trích xuất kích thước Dmax và tỷ lệ thoi dẹt...`;
-                    else progressText.innerText = `Đang hoàn thiện đánh giá rủi ro góc #${i + 1}...`;
+                progressText.innerText = `Đang gửi ảnh góc #${i + 1} lên Gemini AI phân tích thực tế...`;
+                progressBar.style.width = `${Math.round(((i + 0.5) / fileList.length) * 100)}%`;
 
-                    await new Promise(r => setTimeout(r, 200));
+                try {
+                    item.result = await analyzeWithGeminiAPI(item.file, matType, EMBEDDED_API_KEY);
+                } catch (err) {
+                    alert(`Lỗi phân tích AI ở ảnh #${i + 1}: ${err.message}. Vui lòng kiểm tra lại ảnh hoặc kết nối mạng!`);
+                    btn.disabled = false;
+                    progressContainer.classList.add('hidden');
+                    return;
                 }
-
-                item.result = await analyzeWithGeminiAPI(item.file, matType, EMBEDDED_API_KEY);
             }
 
             renderSummary();
@@ -292,50 +290,55 @@
         }
 
         async function analyzeWithGeminiAPI(file, matType, apiKey) {
-            try {
-                const base64Data = await new Promise((res) => {
-                    const r = new FileReader();
-                    r.onload = () => res(r.result.split(',')[1]);
-                    r.readAsDataURL(file);
-                });
+            const base64Data = await new Promise((res) => {
+                const r = new FileReader();
+                r.onload = () => res(r.result.split(',')[1]);
+                r.readAsDataURL(file);
+            });
 
-                const promptText = `Bạn là kỹ sư QA/QC vật liệu xây dựng. Hãy phân tích kỹ bức ảnh mẫu đá (${matType}) theo TCVN 7570:2006 / TCVN 8859:2011 dựa trên thước đo trong ảnh. Trích xuất:
-1. Dmax (mm): số thực.
-2. flakyPercent (%): tỷ lệ hạt thoi dẹt.
-3. dustPercent (%): hàm lượng bụi sét.
-4. weatheredPercent (%): tỷ lệ đá phong hóa.
-5. uniformityScore (%): độ đồng đều mẫu.
-6. scaleStatus (string): trạng thái nhận diện thước.
-Trả về định dạng JSON thuần duy nhất, không có markdown formatting:
+            // Yêu cầu AI kiểm tra tính hợp lệ của ảnh mẫu đá hiện trường
+            const promptText = `Bạn là chuyên gia kiểm định vật liệu xây dựng. Hãy kiểm tra bức ảnh này có phải là ảnh chụp mẫu đá xây dựng / cốt liệu / cấp phối đá dăm hiện trường hay không?
+Nếu đây KHÔNG phải là ảnh mẫu đá (ví dụ: ảnh phong cảnh, ảnh chân dung, ảnh đồ họa, poster, v.v.), hãy trả về JSON:
+{"error": "Ảnh tải lên không phải là mẫu vật liệu đá hiện trường hợp lệ. Vui lòng chọn đúng ảnh chụp mẫu đá kèm thước đo."}
+
+Nếu ĐÚNG là ảnh mẫu đá, hãy phân tích theo TCVN 7570:2006 / TCVN 8859:2011 dựa trên thước đo trong ảnh và trích xuất:
+- Dmax (mm): số thực
+- flakyPercent (%): tỷ lệ hạt thoi dẹt
+- dustPercent (%): hàm lượng bụi sét
+- weatheredPercent (%): tỷ lệ đá phong hóa
+- uniformityScore (%): độ đồng đều mẫu
+- scaleStatus (string): trạng thái nhận diện thước
+
+Trả về JSON thuần duy nhất, không dùng markdown:
 {"dMaxMm": number, "flakyPercent": number, "dustPercent": number, "weatheredPercent": number, "uniformityScore": number, "scaleStatus": "string"}`;
 
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [
-                                { text: promptText },
-                                { inline_data: { mime_type: file.type, data: base64Data } }
-                            ]
-                        }]
-                    })
-                });
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: promptText },
+                            { inline_data: { mime_type: file.type, data: base64Data } }
+                        ]
+                    }]
+                })
+            });
 
-                const json = await response.json();
-                const rawText = json.candidates[0].content.parts[0].text;
-                const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-                return JSON.parse(cleanText);
-            } catch (e) {
-                return {
-                    dMaxMm: 22.5,
-                    flakyPercent: 12,
-                    dustPercent: 3,
-                    weatheredPercent: 5,
-                    uniformityScore: 95,
-                    scaleStatus: "Đã phân tích qua AI"
-                };
+            const json = await response.json();
+            if (json.error) {
+                throw new Error(json.error.message || "Lỗi gọi API Google.");
             }
+
+            const rawText = json.candidates[0].content.parts[0].text;
+            const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+            const resultData = JSON.parse(cleanText);
+
+            if (resultData.error) {
+                throw new Error(resultData.error);
+            }
+
+            return resultData;
         }
 
         function getColorClass(val, maxLimit, warningMargin = 3) {
