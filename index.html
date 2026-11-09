@@ -28,7 +28,7 @@
                 <div>
                     <div class="flex items-center space-x-2">
                         <h1 class="font-bold text-slate-100 tracking-wide text-base">AggriCheck QC Pro</h1>
-                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v7.6 Strict AI Guard</span>
+                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v7.7 Live AI Connected</span>
                     </div>
                     <p class="text-xs text-slate-400">Hệ thống Đánh giá Cốt liệu & Cấp phối Đá dăm Hiện trường (TCVN)</p>
                 </div>
@@ -193,7 +193,7 @@
     </main>
 
     <script>
-        const EMBEDDED_API_KEY = "AQ.Ab8RN6LriVy5iLePARXkawnbKkrrQUCrLqg38CQKrq7FRNFDPQ";
+        const EMBEDDED_API_KEY = "AQ.Ab8RN6JpbtJuXDiEx-zUk-Vr1oK1gXz9hJN4tkC9paWNHK12rQ";
 
         let fileList = [];
 
@@ -296,7 +296,6 @@
                 r.readAsDataURL(file);
             });
 
-            // Yêu cầu AI kiểm tra tính hợp lệ của ảnh mẫu đá hiện trường
             const promptText = `Bạn là chuyên gia kiểm định vật liệu xây dựng. Hãy kiểm tra bức ảnh này có phải là ảnh chụp mẫu đá xây dựng / cốt liệu / cấp phối đá dăm hiện trường hay không?
 Nếu đây KHÔNG phải là ảnh mẫu đá (ví dụ: ảnh phong cảnh, ảnh chân dung, ảnh đồ họa, poster, v.v.), hãy trả về JSON:
 {"error": "Ảnh tải lên không phải là mẫu vật liệu đá hiện trường hợp lệ. Vui lòng chọn đúng ảnh chụp mẫu đá kèm thước đo."}
