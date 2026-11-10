@@ -35,7 +35,7 @@
                 <div>
                     <div class="flex items-center space-x-2">
                         <h1 class="font-bold text-slate-100 tracking-wide text-base">AggriCheck QC Pro</h1>
-                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v8.5 Persistent History</span>
+                        <span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">v8.4 History Manager</span>
                     </div>
                     <p class="text-xs text-slate-400">Hệ thống Đánh giá Cốt liệu & Cấp phối Đá dăm Hiện trường (TCVN)</p>
                 </div>
@@ -60,7 +60,7 @@
         <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-xs text-amber-200 flex items-start space-x-3 no-print">
             <i class="fa-solid fa-shield-halved text-amber-400 text-lg mt-0.5 flex-shrink-0"></i>
             <div class="leading-relaxed">
-                <strong class="font-semibold text-amber-300">Hướng dẫn Hiện trường:</strong> Nhập API Key ở góc trên bên phải, chụp ảnh mẫu đặt kèm thước đo. Lịch sử phân tích lưu trữ toàn bộ ảnh chụp để tra cứu lại bất cứ lúc nào.
+                <strong class="font-semibold text-amber-300">Hướng dẫn Hiện trường:</strong> Nhập API Key ở góc trên bên phải, chụp ảnh mẫu đặt kèm thước đo. Kết quả phân tích sẽ tự động lưu vào Lịch sử để anh dễ dàng tra cứu hoặc xóa khi không cần thiết.
             </div>
         </div>
 
@@ -251,19 +251,13 @@
             document.getElementById('historyCount').innerText = analysisHistory.length;
         }
 
-        window.handleFiles = async function(files) {
+        window.handleFiles = function(files) {
             for (let file of files) {
                 if (file.type.startsWith('image/')) {
-                    const base64Url = await new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = (e) => resolve(e.target.result);
-                        reader.readAsDataURL(file);
-                    });
-
                     fileList.push({
                         id: 'img_' + Math.random().toString(36).substr(2, 9),
                         file: file,
-                        previewUrl: base64Url,
+                        previewUrl: URL.createObjectURL(file),
                         result: null
                     });
                 }
