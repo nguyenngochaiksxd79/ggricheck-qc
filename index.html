@@ -296,9 +296,9 @@
                 const div = document.createElement('div');
                 div.className = "relative group border border-slate-800 rounded-lg overflow-hidden bg-slate-950 aspect-square shadow-sm";
                 div.innerHTML = `
-                    <img src="${item.previewUrl}" class="w-full h-full object-cover">
-                    <span class="absolute top-1 left-1 bg-slate-950/80 text-slate-300 text-[10px] font-mono-num px-1.5 py-0.5 rounded">Góc #${index + 1}</span>
-                    <button onclick="removeFile('${item.id}')" class="absolute top-1 right-1 bg-rose-500/80 hover:bg-rose-600 text-white text-xs w-4 h-4 rounded flex items-center justify-center transition">✕</button>
+                    <img src="\${item.previewUrl}" class="w-full h-full object-cover">
+                    <span class="absolute top-1 left-1 bg-slate-950/80 text-slate-300 text-[10px] font-mono-num px-1.5 py-0.5 rounded">Góc #\${index + 1}</span>
+                    <button onclick="removeFile('\${item.id}')" class="absolute top-1 right-1 bg-rose-500/80 hover:bg-rose-600 text-white text-xs w-4 h-4 rounded flex items-center justify-center transition">✕</button>
                 `;
                 grid.appendChild(div);
             });
@@ -329,8 +329,9 @@
             for (let i = 0; i < fileList.length; i++) {
                 const item = fileList[i];
                 
-                progressText.innerText = `Đang gửi ảnh góc #${i + 1} lên Gemini AI phân tích thực tế...`;
-                progressBar.style.width = `${Math.round(((i + 0.5) / fileList.length) * 100)}%`;
+                progressText.innerText = `Đang gửi ảnh góc #\${i + 1} lên Gemini AI phân tích thực tế...`;
+                const percent = Math.round(((i + 0.5) / fileList.length) * 100);
+                progressBar.style.width = `${percent}\%`; progressPercent.innerText = `${percent}%`;
 
                 try {
                     item.result = await analyzeWithRetry(ai, item.file, matType);
@@ -342,6 +343,9 @@
                     return;
                 }
             }
+
+            progressBar.style.width = '100%';
+            progressPercent.innerText = '100%';
 
             renderSummary();
             saveCurrentToHistory(matType);
@@ -369,20 +373,35 @@
                 r.readAsDataURL(file);
             });
 
-            const promptText = `Bạn là chuyên gia kiểm định vật liệu xây dựng. Hãy kiểm tra bức ảnh này có phải là ảnh chụp mẫu đá xây dựng / cốt liệu / cấp phối đá dăm hiện trường hay không?
-Nếu đây KHÔNG phải là ảnh mẫu đá (ví dụ: ảnh phong cảnh, ảnh chân dung, ảnh đồ họa, poster, v.v.), hãy trả về JSON:
-{"error": "Ảnh tải lên không phải là mẫu vật liệu đá hiện trường hợp lệ. Vui lòng chọn đúng ảnh chụp mẫu đá kèm thước đo."}
+            let standardContext = "TCVN 7570:2006 (Đá 1x2)";
+            if (matType === 'cpdd_l1') standardContext = "TCVN 8859:2011 (Cấp phối đá dăm Loại 1)";
+            if (matType === 'cpdd_l2') standardContext = "TCVN 8859:2011 (Cấp phối đá dăm Loại 2)";
 
-Nếu ĐÚNG là ảnh mẫu đá, hãy phân tích theo TCVN 7570:2006 / TCVN 8859:2011 dựa trên thước đo trong ảnh và trích xuất:
-- Dmax (mm): số thực
-- flakyPercent (%): tỷ lệ hạt thoi dẹt
-- dustPercent (%): hàm lượng bụi sét
-- weatheredPercent (%): tỷ lệ đá phong hóa
-- uniformityScore (%): độ đồng đều mẫu
-- scaleStatus (string): trạng thái nhận diện thước
+            const promptText = `Bạn là kỹ sư trưởng phòng thí nghiệm kiểm định vật liệu xây dựng (LAS-XD) với 15 năm kinh nghiệm. 
+Hãy kiểm tra bức ảnh chụp mẫu cốt liệu đá hiện trường theo tiêu chuẩn: ${standardContext}.
 
-Trả về JSON thuần duy nhất, không dùng markdown:
-{"dMaxMm": number, "flakyPercent": number, "dustPercent": number, "weatheredPercent": number, "uniformityScore": number, "scaleStatus": "string"}`;
+YÊU CẦU PHÂN TÍCH KỸ THUẬT NGẶT NGHÈO:
+1. XÁC THỰC MẪU: Kiểm tra xem ảnh có chứa mẫu đá dăm/cốt liệu đặt cạnh thước đo tỷ lệ (thước dây, thước kẻ, vật chuẩn) hay không. Nếu ĐÂY KHÔNG PHẢI là ảnh mẫu đá (ảnh phong cảnh, người, đồ họa...), bắt buộc trả về JSON định dạng: {"error": "Ảnh tải lên không phải là mẫu vật liệu đá hiện trường hợp lệ. Vui lòng chọn đúng ảnh chụp mẫu đá kèm thước đo."}
+2. HIỆU CHUẨN TỶ LỆ: Dựa vào các vạch chia trên thước trong ảnh làm mốc chuẩn (mm/cm), tính toán kích thước thực tế của các hạt.
+3. CỠ HẠT DMAX (mm): Xác định chính xác kích thước hạt lớn nhất theo chiều dài lớn nhất (số thực, ví dụ: 24.5).
+4. TỶ LỆ THOI DẸT (%): Đếm/ước lượng tỷ lệ phần trăm các hạt có chiều dài lớn hơn 3 lần chiều dày (hạt dẹt, hạt thoi).
+5. HÀM LƯỢNG BỤI / SÉT (%): Đánh giá lớp bột mịn, bùn sét bám trên bề mặt đá hoặc lẫn trong mẫu.
+6. ĐÁ PHONG HÓA (%): Ước lượng tỷ lệ hạt bị biến màu, mục rữa, rạn nứt cấu trúc.
+7. ĐỘ ĐỒNG ĐỀU (%): Đánh giá độ đồng đều cỡ hạt của mẫu trong khung hình.
+8. TRẠNG THÁI THƯỚC (string): Mô tả ngắn gọn việc nhận diện thước (Ví dụ: "Nhận diện rõ vạch cm trên thước", "Thước bị mờ, đo tương đối").
+
+QUY TẮC BẮT BUỘC: 
+Trả về ĐÚNG MỘT ĐỐI TƯỢNG JSON THUẦN TÚY, không kèm bất kỳ thẻ Markdown nào (như \`\`\`json), không có văn bản giải thích ngoài JSON.
+
+Cấu trúc JSON yêu cầu:
+{
+  "dMaxMm": number,
+  "flakyPercent": number,
+  "dustPercent": number,
+  "weatheredPercent": number,
+  "uniformityScore": number,
+  "scaleStatus": "string"
+}`;
 
             const response = await aiInstance.models.generateContent({
                 model: 'gemini-3.8-flash',
@@ -398,8 +417,24 @@ Trả về JSON thuần duy nhất, không dùng markdown:
             });
 
             const rawText = response.text;
-            const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-            const resultData = JSON.parse(cleanText);
+            let cleanText = rawText.trim();
+            cleanText = cleanText.replace(/^```json\s*/i, '');
+            cleanText = cleanText.replace(/^```\s*/i, '');
+            cleanText = cleanText.replace(/\s*```$/i, '');
+            
+            const firstOpen = cleanText.indexOf('{');
+            const lastClose = cleanText.lastIndexOf('}');
+            if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+                cleanText = cleanText.substring(firstOpen, lastClose + 1);
+            }
+
+            let resultData;
+            try {
+                resultData = JSON.parse(cleanText);
+            } catch (e) {
+                console.error("Lỗi parse JSON từ AI:", cleanText);
+                throw new Error("Không thể phân tích dữ liệu trả về từ AI. Vui lòng chụp lại ảnh rõ nét hơn.");
+            }
 
             if (resultData.error) {
                 throw new Error(resultData.error);
@@ -579,13 +614,13 @@ Trả về JSON thuần duy nhất, không dùng markdown:
             overallCard.className = `p-5 rounded-xl border ${overallRisk === 'HIGH' ? 'bg-rose-950/20 border-rose-500/30' : (overallRisk === 'MED' ? 'bg-amber-950/20 border-amber-500/30' : 'bg-emerald-950/20 border-emerald-500/30')}`;
             overallCard.innerHTML = `
                 <div class="flex items-center justify-between">
-                    <h4 class="font-bold text-sm text-slate-100">KẾT LUẬN ĐÁNH GIÁ RỦI RO HIỆN TRƯỜNG (AI)</h4>
+                    <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-300">Đánh giá tổng quan chất lượng mẫu</h4>
                     ${overallBadge}
                 </div>
-                <p class="text-xs text-slate-300 leading-relaxed mt-2">${overallMsg}</p>
+                <p class="text-xs text-slate-300 leading-relaxed pt-1">${overallMsg}</p>
             `;
 
-            document.getElementById('batchMetaInfo').innerText = `Đã phân tích qua AI từ ${count} góc chụp lúc ${new Date().toLocaleTimeString('vi-VN')} - ngày ${new Date().toLocaleDateString('vi-VN')}`;
+            document.getElementById('batchMetaInfo').innerText = `Đã tổng hợp kết quả từ ${count} góc chụp - Tiêu chuẩn áp dụng: ${matName}`;
         }
     </script>
 </body>
